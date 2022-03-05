@@ -1,0 +1,13 @@
+{
+  "name": "detoxify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "next": "cd detoxify-next && npm run dev",
+    "api": "cd detoxify-api && npm run start"
+  },
+  "author": "",
+  "license": "ISC"
+}
