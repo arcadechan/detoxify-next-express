@@ -1,8 +1,7 @@
 import Head from "next/head"
-import { Footer, Header } from "../components"
-import axios from 'axios';
-import { useState } from "react";
+import { Footer, Header, PlaylistGenerator } from "../components"
 import Cookies from 'js-cookie';
+import { useEffect, useState } from "react";
 
 export async function getStaticProps() {
   return {
@@ -18,21 +17,12 @@ export async function getStaticProps() {
 export default function DetoxedReleaseRadar(props) {
   const { CLIENT_ID, REDIRECT_URI, SCOPES, STATE } = props;
 
-  const [apiResponse, setResponse] = useState(false);
+  const [ isAccessCodeSet, setAccessCode ] = useState(false)
 
-  const handleApiCall = async (e) => {
-    e.preventDefault();
-
-    axios.get('https://localhost:7255/').then(response => {
-      console.log({ response });
-      setResponse(response?.data?.message);
-    }).catch(error => {
-      console.error({ error });
-    });
-  }
-
-  const isAccessCodeSet = Cookies.get('spotify_access_code');
-
+  useEffect(() => {
+    if(Cookies.get('spotify_access_code')) setAccessCode(true)
+  }, [])
+  
   return (
     <>
       <Head>
@@ -44,7 +34,7 @@ export default function DetoxedReleaseRadar(props) {
       <main className='mx-auto px-10 max-w-screen-lg'>
         {
           isAccessCodeSet
-            ? <h1>PlayListGenerator</h1>
+            ? (<PlaylistGenerator/>)
             : (
               <div id='pre-authentication' className='flex flex-col items-center px-5'>
                 <p>
@@ -73,20 +63,20 @@ export default function DetoxedReleaseRadar(props) {
                   </li>
                 </ul>
                 <div className="inline-block mb-5">
-                        <form method="GET" action="https://accounts.spotify.com/authorize">
-                            <input type="hidden" name="client_id" value={ CLIENT_ID ?? ''}/>
-                            <input type="hidden" name="response_type" value="code"/>
-                            <input type="hidden" name="redirect_uri" value={ REDIRECT_URI ?? ''}/>
-                            <input type="hidden" name="scope" value={ SCOPES ?? ''}/>
-                            <input type="hidden" name="state" value={ STATE ?? '' }/>
-                            <button className="btn btn-spotify m-1">Login With Spotify</button>
-                        </form>
-                    </div>
-                    <div className="inline-block">
-                        <p>
-                            <strong>Reminder:</strong> As a Spotify user you can revoke this applications permissions at any time, or any application you've authenticated before, by visiting <a href="https://www.spotify.com/us/account/apps/" target="_blank">https://www.spotify.com/us/account/apps/</a> and removing access.
-                        </p>
-                    </div>
+                  <form method="GET" action="https://accounts.spotify.com/authorize">
+                    <input type="hidden" name="client_id" value={CLIENT_ID ?? ''} />
+                    <input type="hidden" name="response_type" value="code" />
+                    <input type="hidden" name="redirect_uri" value={REDIRECT_URI ?? ''} />
+                    <input type="hidden" name="scope" value={SCOPES ?? ''} />
+                    <input type="hidden" name="state" value={STATE ?? ''} />
+                    <button className="btn btn-spotify m-1">Login With Spotify</button>
+                  </form>
+                </div>
+                <div className="inline-block">
+                  <p>
+                    <strong>Reminder:</strong> As a Spotify user you can revoke this applications permissions at any time, or any application you've authenticated before, by visiting <a href="https://www.spotify.com/us/account/apps/" target="_blank">https://www.spotify.com/us/account/apps/</a> and removing access.
+                  </p>
+                </div>
               </div>
             )
         }
