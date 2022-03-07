@@ -1,14 +1,16 @@
 import { Request, Response, Router } from "express";
-import axios, { AxiosResponse } from 'axios'
+import axios, { AxiosError, AxiosResponse } from 'axios'
 import { URLSearchParams } from 'url';
 
 const authorizeAccess = (req: Request, res: Response) =>
 {
   const { code, state } : { code: string, state: string } = req.query as any;
 
-  if(code && state && state === process.env.SPOTIFY_ACCESS_STATE)
+
+  if(code.length && state.length && state === process.env.SPOTIFY_ACCESS_STATE)
   {
     res.redirect(`/get-access?code=${encodeURIComponent(code)}`)
+    return;
   }
 
   res.redirect('/get-access')
@@ -16,21 +18,46 @@ const authorizeAccess = (req: Request, res: Response) =>
 
 const getAccess = async (req: Request, res: Response) =>
 {
-  const refresh_token: string = req.cookies.refresh_token;
-  const spotify_access_code: string = req.cookies.spotify_access_code;
-  const user_id: string = req.cookies.user_id;
-  const user_country: string = req.cookies.user_country;
+  let refresh_token: string = req.cookies.refresh_token;
+  let spotify_access_code: string = req.cookies.spotify_access_code;
+  let user_id: string = req.cookies.spotify_user_id;
+  let user_country: string = req.cookies.spotify_user_country;
+  let accessToken: string = ''
 
-  if(req.query?.code && !spotify_access_code)
+
+  if(req.query?.code.length && !spotify_access_code)
   {
-    const code = req.query.code as string;
-    res.cookie('spotify_refresh_token', code, { maxAge: 365 * 24 * 60 * 60 * 1000 }) // one year 😂
-    const data: any = null;
+    spotify_access_code = req.query.code as string;
+    res.cookie('spotify_access_code', spotify_access_code, { maxAge: 365 * 24 * 60 * 60 * 1000 }) // one year 😂
 
-    const response = await getAccessToken('authorization_code', code);
-    // tslint:disable-next-line:no-console
-    console.log('getAccess response', response)
+    const getAccessTokenResponse = await getAccessToken('authorization_code', spotify_access_code);
+
+    if(getAccessTokenResponse.status === 200)
+    {
+      refresh_token = getAccessTokenResponse.data.refresh_token
+      accessToken = getAccessTokenResponse.data.access_token
+      res.cookie('spotify_refresh_token', refresh_token)
+    }
+
+    const getUserResponse: AxiosResponse = await axios.get('https://api.spotify.com/v1/me',
+    {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
+    .then((response: AxiosResponse) => response)
+    .catch((error: AxiosError) =>
+    {
+      // tslint:disable-next-line:no-console
+      console.error(error)
+      return error.response
+    })
+
+    user_id = getUserResponse.data.id
+    user_country = getUserResponse.data.country
   }
+
+  res.cookie('spotify_user_id', user_id)
+  res.cookie('spotify_user_country', user_country)
+  res.status(200).redirect('http://localhost:3000/detoxed-release-radar')
 }
 
 const refreshAccess = (req: Request, res: Response) =>
@@ -40,44 +67,44 @@ const refreshAccess = (req: Request, res: Response) =>
 
 const getAccessToken = async (grantType: string, spotifyAccessCode: string = "", spotifyRefreshToken?: string) =>
 {
-  const client_id: string = process.env.client_id
-  const client_secret: string = process.env.client_secret
+  const clientId: string = process.env.SPOTIFY_APP_CLIENT_ID
+  const clientSecret: string = process.env.SPOTIFY_APP_CLIENT_SECRET
 
-  let formParams = { grant_type: grantType }
+  const formParams: URLSearchParams = new URLSearchParams()
+  formParams.append('grant_type', grantType)
 
   if(spotifyAccessCode.length)
   {
     const APP_URL: string = process.env.APP_URL
     const AUTHORIZE_ACCESS_ENDPOINT: string = process.env.AUTHORIZE_ACCESS_ENDPOINT
 
-    formParams = Object.assign(formParams, { code: spotifyAccessCode })
-    formParams = Object.assign(formParams, { redirect_uri: `${APP_URL}${AUTHORIZE_ACCESS_ENDPOINT}`})
+    formParams.append('code', spotifyAccessCode)
+    formParams.append('redirect_uri', `${APP_URL}${AUTHORIZE_ACCESS_ENDPOINT}`)
   }
 
   if(grantType === 'refresh_token')
   {
-    formParams = Object.assign(formParams, { refresh_token: spotifyRefreshToken })
+    formParams.append('refresh_token', spotifyRefreshToken )
   }
 
-  const token: string = Buffer.from(`${client_id}:${client_secret}`, 'utf-8').toString('base64')
-  const response = await axios.post('https://accounts.spotify.com/api/token',
-  new URLSearchParams(formParams).toString(),
+  const token: string = Buffer.from(`${clientId}:${clientSecret}`, 'utf-8').toString('base64')
+
+  const apiTokenResponse: AxiosResponse = await axios.post('https://accounts.spotify.com/api/token', formParams,
   {
-    headers: {
+    headers:
+    {
       'Authorization': `Basic ${token}`,
-      'Content-Type': 'x-www-form-urlencoded'
+      'Content-Type': 'application/x-www-form-urlencoded'
     }
-  }).then((res: AxiosResponse) =>
+  }).then((response: AxiosResponse) => response)
+  .catch((error: AxiosError) =>
   {
     // tslint:disable-next-line:no-console
-    console.log('response', res)
-  }).catch((error) =>
-  {
-    // tslint:disable-next-line:no-console
-    console.error('error', error)
+    console.error(error)
+    return error.response
   })
 
-  return response;
+  return apiTokenResponse;
 }
 
 export {
