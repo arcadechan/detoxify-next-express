@@ -66,6 +66,15 @@ const getArtists = async (req: Request, res: Response) => {
   res.status(200).json({artists: cleanedArtists})
 }
 
+const createPlaylist = async (req: Request, res: Response) => {
+  let albums: any[] = [];
+  let tracks: any[] = [];
+
+  debug('createPlaylist req', {req, 'req.body': req.body});
+  res.status(200).json({albums, tracks})
+}
+
 export {
-  getArtists
+  getArtists,
+  createPlaylist
 }
