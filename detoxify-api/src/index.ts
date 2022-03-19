@@ -14,6 +14,7 @@ app.use(
     credentials: true
   })
 )
+app.use('/img', express.static('public'));
 const port = process.env.PORT
 
 app.get('/', (req: Request, res: Response,) => {
