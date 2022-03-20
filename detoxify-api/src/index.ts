@@ -12,9 +12,10 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL,
     credentials: true
-  })
+  }),
+  express.static('./public')
 )
-app.use('/img', express.static('public'));
+
 const port = process.env.PORT
 
 app.get('/', (req: Request, res: Response,) => {

@@ -1,4 +1,4 @@
-import { Request, response, Response } from 'express'
+import { Request, Response } from 'express'
 import axios, { Axios, AxiosError, AxiosResponse } from 'axios'
 import { refreshAccess } from './AuthorizationController'
 import { debug } from 'console'
@@ -68,15 +68,15 @@ const getArtists = async (req: Request, res: Response) => {
 }
 
 const createPlaylist = async (req: Request, res: Response) => {
-  const user_id: string = req.cookies.spotify_user_id
-  const user_country: string = req.cookies.spotify_user_country
+  const userId: string = req.cookies.spotify_user_id
+  const userCountry: string = req.cookies.spotify_user_country
   let spotify_playlist_id: string = req.cookies.spotify_playlist_id
   let accessToken: string = req.cookies.spotify_access_token
 
   if(!accessToken)
   {
     const refreshResponse = await refreshAccess(req);
-    
+
     accessToken = refreshResponse.accessToken
     const expiresIn = refreshResponse.expiresIn
 
@@ -89,7 +89,7 @@ const createPlaylist = async (req: Request, res: Response) => {
 
   if(!spotify_playlist_id)
   {
-    const createPlaylistResponse = await axios.post(`https://api.spotify.com/v1/users/${user_id}/playlists`, {name: 'Detoxed Release Radar'},
+    const createPlaylistResponse = await axios.post(`https://api.spotify.com/v1/users/${userId}/playlists`, {name: 'Detoxed Release Radar'},
     {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     })
@@ -101,10 +101,7 @@ const createPlaylist = async (req: Request, res: Response) => {
       spotify_playlist_id = createPlaylistResponse.data;
       res.cookie('spotify_playlist_id', spotify_playlist_id)
 
-      const defaultImage = (): string => {
-        let image: Buffer = fs.readFileSync('/img/detoxed-release-radar.jpg');
-        return Buffer.from(image).toString('base64')
-      }
+      const defaultImage: string = Buffer.from(fs.readFileSync('./public/img/detoxed-release-radar.jpg')).toString('base64');
 
       await axios.put(`https://api.spotify.com/v1/playlists/${spotify_playlist_id}/images`, defaultImage,
       {
@@ -129,18 +126,18 @@ const createPlaylist = async (req: Request, res: Response) => {
   }
   else
   {
-    //Follow the playlist in case a user has deleted it from their account. This reduces cluttering the playlist recovery list.
+    // Follow the playlist in case a user has deleted it from their account. This reduces cluttering the playlist recovery list.
     await axios.put(`https://api.spotify.com/v1/playlist/${spotify_playlist_id}/followers`, {public: false},
     {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     })
-    .catch((err: AxiosError) => 
+    .catch((err: AxiosError) =>
     {
       debug(`Something went wrong when trying to re-follow playlist: ${spotify_playlist_id}`)
       debug(err.response)
     })
 
-    //Delete contents in playlist before adding new songs.
+    // Delete contents in playlist before adding new songs.
     await axios.put(`https://api.spotify.com/v1/playlist/${spotify_playlist_id}/tracks`, {uris: []},
     {
       headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -153,7 +150,7 @@ const createPlaylist = async (req: Request, res: Response) => {
   }
 
   const albums: any[] = []
-  let album_tracks: any = {}
+  const albumTracks: any = {}
 
   if(req.body?.artistIds.length)
   {
@@ -165,16 +162,15 @@ const createPlaylist = async (req: Request, res: Response) => {
     const junkTrackInfo: string[] = ['available_markets', 'disc_number', 'explicit', 'external_urls', 'href', 'is_local', 'type']
     const junkTrackArtistInfo: string[] = ['external_urls', 'href', 'id', 'type', 'uri']
 
-    for(let i = 0; i < artistIds.length; i++)
+    for(const artistId of artistIds)
     {
-      const artistId = artistIds[i]
       const artistAlbums: any[] = []
 
       const singlesResponse = await axios.get(`https://api.spotify.com/v1/artists/${artistId}/albums`,
       {
         params: {
           include_groups: 'single',
-          market: user_country,
+          market: userCountry,
           limit: 3
         },
         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -190,7 +186,7 @@ const createPlaylist = async (req: Request, res: Response) => {
       {
         params: {
           include_groups: 'album',
-          market: user_country,
+          market: userCountry,
           limit: 3
         },
         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -206,10 +202,8 @@ const createPlaylist = async (req: Request, res: Response) => {
       {
         artistAlbums.push(...singlesResponse.data.items, ...albumsResponse.data.items)
 
-        for(let j = 0; j < artistAlbums.length; j++)
+        for(const album of artistAlbums)
         {
-          const album = artistAlbums[j];
-
           if(Date.parse(album.release_date) >= oneMonthBack)
           {
             junkAlbumInfo.forEach(key =>
@@ -237,13 +231,13 @@ const createPlaylist = async (req: Request, res: Response) => {
             if(tracksResponse.status === 200)
             {
               const tracks: any[] = tracksResponse.data.items;
-              const track_uris: string[] = []
+              const trackUris: string[] = []
 
               tracks.forEach(track =>
               {
                 junkTrackInfo.forEach(key =>
                 {
-                  delete track[key] 
+                  delete track[key]
                 })
 
                 track.artists.forEach((artist: any) =>
@@ -251,15 +245,15 @@ const createPlaylist = async (req: Request, res: Response) => {
                   junkTrackArtistInfo.forEach(key =>
                   {
                     if(!!artist[key]) delete artist[key]
-                  })  
+                  })
                 })
 
-                track_uris.push(track.uri)
+                trackUris.push(track.uri)
               })
 
-              album_tracks[album.id] = tracks
+              albumTracks[album.id] = tracks
 
-              await axios.post(`https://api.spotify.com/v1/playlists/${spotify_playlist_id}/tracks`, { uris: track_uris },
+              await axios.post(`https://api.spotify.com/v1/playlists/${spotify_playlist_id}/tracks`, { uris: trackUris },
               {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
               })
@@ -284,7 +278,7 @@ const createPlaylist = async (req: Request, res: Response) => {
   }
 
   debug('createPlaylist req', {req, 'req.body': req.body});
-  res.status(200).json({albums, tracks: album_tracks})
+  res.status(200).json({albums, tracks: albumTracks})
 }
 
 export {
