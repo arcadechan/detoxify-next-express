@@ -21,6 +21,10 @@ export default function DetoxedReleaseRadar(props) {
 
   useEffect(() => {
     if(Cookies.get('spotify_access_code')) setAccessCode(true)
+
+    return () => {
+      setAccessCode(false)
+    }
   }, [])
   
   return (

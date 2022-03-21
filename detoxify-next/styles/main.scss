@@ -177,3 +177,158 @@ hr {
         }
     }
 }
+
+#album-gallery {
+    .album-container {
+        // width: 100%;
+        display: inline-block;
+
+        .album-inner-container {
+            padding: 1em;
+            margin: .5em;
+            background-color: #000000;
+
+            //CUSTOM FLIP CARD CSS
+            .flip-card {
+                // perspective: 1000px;
+
+                .flip-card-inner {
+                    position: relative;
+                    text-align: center;
+                    transition: transform 0.25s;
+                    transform-style: preserve-3d;                    
+
+                    &.flipped {
+                        transform: rotateY(180deg);
+
+                        .flip-card-front {
+                            display: none;
+                        }
+
+                        .flip-card-back {
+                            display: block;
+                        }
+                    }
+                    
+                    .flip-card-front {
+                        .album-artist-link,
+                        .album-link {
+                            color: $spotify-green;
+                            text-decoration: underline;
+
+                            &:hover {
+                                color: $text-color;
+                            }
+                        }
+
+                        table tbody tr td {
+                            vertical-align: super;
+                        }
+                    }
+
+                    .flip-card-front,
+                    .flip-card-back {
+                        width: 100%;
+                        height: 200px;
+                        backface-visibility: hidden;
+                    }
+
+                    .flip-card-back {
+                        transform: rotateY(180deg);
+                        display: none;
+                        padding-right: .5em;
+                        overflow-y: auto;
+
+                        table tbody tr td {
+                            vertical-align: middle;
+                        }                        
+
+                        .track-list-container {
+                            .track-no {
+                                width: 25%;
+                            }
+
+                            tbody {
+                                tr {
+                                    &.playing {
+                                        background-color: #282828;
+                                    }
+
+                                    .track-no-row {
+                                        padding-left: .5em;
+                                    }
+                                }
+                            }
+
+                            .track-preview {
+                                width: 2.5em;
+                                text-align: center;
+                                cursor: pointer;
+                                color: $spotify-green;
+
+                                &:hover:not(.playing-icon) {
+                                    color: $text-color;
+                                }
+
+                                .playing-icon {
+                                    color: white;
+                                }
+                            }
+                        }
+
+                        &::-webkit-scrollbar {
+                            width: 10px;
+                        }
+        
+                        &::-webkit-scrollbar-button {
+                            display: none;
+                        }
+        
+                        &::-webkit-scrollbar-thumb {
+                            border-radius: 10px;
+                            background-color: $spotify-green;
+                        }
+        
+                        &::-webkit-scrollbar-track {
+                            background-color: darken($spotify-green, 30%);
+                            border-radius: 10px;
+                        }
+                    }
+                }
+            }
+
+            .flip-card-button {
+                [id^="flip-view-albums-"] {
+                    display: none;
+                }
+            }
+        }
+
+        img {
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            font-size: 12px;
+
+            tr  {
+                td {
+                    padding: .75em 0;
+                    text-align: left;
+                    border-bottom: 1px solid #191919;
+                }
+            }
+
+            tbody {
+                tr {
+                    &:last-child {
+                        td {
+                            border-bottom: none;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -9,11 +9,11 @@ import fs from 'fs'
 const getArtists = async (req: Request, res: Response) => {
   let accessToken: string = req.cookies.spotify_access_token
 
-  debug('getArtists {accessToken, req.cookies}', {accessToken, 'req.cookies': req.cookies})
+  // debug('getArtists {accessToken, req.cookies}', {accessToken, 'req.cookies': req.cookies})
 
   if(!accessToken)
   {
-    debug('no access token!')
+    // debug('no access token!')
     const refreshResponse = await refreshAccess(req);
 
     accessToken = refreshResponse.accessToken
@@ -25,7 +25,7 @@ const getArtists = async (req: Request, res: Response) => {
       })
     }
 
-    debug('getArtists accessToken from refresh', {accessToken})
+    // debug('getArtists accessToken from refresh', {accessToken})
   }
 
   const artists: any[] = []
@@ -40,7 +40,7 @@ const getArtists = async (req: Request, res: Response) => {
     })
     .then((response: AxiosResponse) =>
     {
-      debug('getArtists axios response', {'data.artists.items': response.data.artists.items, 'headers': response.headers})
+      // debug('getArtists axios response', {'data.artists.items': response.data.artists.items, 'headers': response.headers})
       artists.push(...response.data.artists.items)
       count++;
       nextURL = response.data.artists.next
@@ -48,6 +48,8 @@ const getArtists = async (req: Request, res: Response) => {
     {
       debug('getArtists error', {error, responseHeaders: error.response.headers, responseData: error.response.data})
       nextURL = ''
+      res.status(500).send(error.response.data);
+      return;
     })
   }while(nextURL && count < 2)
 
@@ -98,7 +100,7 @@ const createPlaylist = async (req: Request, res: Response) => {
 
     if(createPlaylistResponse.status === 201)
     {
-      spotify_playlist_id = createPlaylistResponse.data;
+      spotify_playlist_id = createPlaylistResponse.data.id;
       res.cookie('spotify_playlist_id', spotify_playlist_id)
 
       const defaultImage: string = Buffer.from(fs.readFileSync('./public/img/detoxed-release-radar.jpg')).toString('base64');
@@ -202,6 +204,7 @@ const createPlaylist = async (req: Request, res: Response) => {
       {
         artistAlbums.push(...singlesResponse.data.items, ...albumsResponse.data.items)
 
+        debug(`Starting loop of ${artistId}'s albums.`);
         for(const album of artistAlbums)
         {
           if(Date.parse(album.release_date) >= oneMonthBack)
@@ -213,7 +216,8 @@ const createPlaylist = async (req: Request, res: Response) => {
 
             albums.push(album)
 
-            const tracksResponse = await axios.get(`https://api.spotify/com/v1/albums/${album.id}/tracks`,
+            debug('Calling',`https://api.spotify/com/v1/albums/${album.id}/tracks`)
+            const tracksResponse = await axios.get(`https://api.spotify.com/v1/albums/${album.id}/tracks`,
             {
               params: {
                 limit: 50
@@ -224,8 +228,8 @@ const createPlaylist = async (req: Request, res: Response) => {
             .catch((err: AxiosError) =>
             {
               debug(`Something went wrong when trying to get album (${album.id}) tracks for artist ${artistId}`)
-              debug(err.response.data)
-              return err.response
+              debug(err)
+              return {status: 500, data: null};
             })
 
             if(tracksResponse.status === 200)
@@ -277,7 +281,6 @@ const createPlaylist = async (req: Request, res: Response) => {
     }
   }
 
-  debug('createPlaylist req', {req, 'req.body': req.body});
   res.status(200).json({albums, tracks: albumTracks})
 }
 

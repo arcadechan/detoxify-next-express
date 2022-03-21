@@ -32,7 +32,7 @@ const PlaylistGenerator = () => {
     setGeneration(GEN_STATE.GETTING_ARTISTS)
     setArtistsInStorage(false)
 
-    await axios.get(`${API}/get-artists`)
+    await axios.get(`${API}/get-artists`, {withCredentials: true})
       .then(response => {
         setGeneration(GEN_STATE.ARTISTS_RETRIEVED)
         setArtists(response.data.artists)
@@ -47,13 +47,13 @@ const PlaylistGenerator = () => {
   const generatePlaylist = async () => {
     setGeneration(GEN_STATE.GENERATING_PLAYLIST);
     setAlbums([])
-    setTracks([])
+    setTracks({})
 
     const artistIds = artists.map(artist => artist.id);
 
     console.log({artistIds});
 
-    await axios.post(`${API}/create-playlist`, { artistIds })
+    await axios.post(`${API}/create-playlist`, { artistIds }, {withCredentials: true})
       .then(response => {
         console.log('generatePlaylist response.data', response.data)
         setGeneration(GEN_STATE.ALBUMS_RETRIEVED);
@@ -66,6 +66,25 @@ const PlaylistGenerator = () => {
         setGeneration(GEN_STATE.ARTISTS_RETRIEVED)
         console.error(error);
       });
+  }
+
+  const flipCard = (cardIndex) => {
+    let card = document.querySelector(`#card-${cardIndex}`)
+
+    if(card){
+      card.classList.toggle('flipped')
+
+      let trackText = document.querySelector(`#flip-view-tracks-${cardIndex}`);
+      let albumText = document.querySelector(`#flip-view-tracks-${cardIndex}`);
+
+      if(card.classList.contains('flipped')) {
+        trackText.style.display = 'none';
+        albumText.style.display = 'inline-block';
+      } else {
+        trackText.style.display = 'inline-block';
+        albumText.style.display = 'none';
+      }
+    }
   }
 
   const {
@@ -96,7 +115,7 @@ const PlaylistGenerator = () => {
     const savedAlbums = localStorage.getItem('albums')
     const savedTracks = localStorage.getItem('tracks')
 
-    console.log({savedAlbums, savedTracks})
+    // console.log({savedAlbums, savedTracks})
 
     if(!!savedAlbums && JSON.parse(savedAlbums).length){
       setGeneration(GEN_STATE.ALBUMS_RETRIEVED)
@@ -104,7 +123,7 @@ const PlaylistGenerator = () => {
       setAlbums(JSON.parse(savedAlbums))
     }
 
-    if(!!savedTracks && JSON.parse(savedTracks).length){
+    if(!!savedTracks && Object.keys(JSON.parse(savedTracks)).length){
       setTracksInStorage(true)
       setTracks(JSON.parse(savedTracks))
     }
@@ -112,7 +131,7 @@ const PlaylistGenerator = () => {
     return () => {
       setGeneration(GEN_STATE.PENDING),
       setAlbums([]),
-      setTracks([]),
+      setTracks({}),
       setAlbumsInStorage(false),
       setArtistsInStorage(false)
     }
@@ -121,20 +140,24 @@ const PlaylistGenerator = () => {
   useEffect(() => {
     let count = 0
     
-    if(tracks.length){
+    if(Object.keys(tracks).length){
+      console.log('useEffect object.keys(tracks).length');
       for(const track in tracks){
         count += tracks[track].length
       }
+
+      // console.log('useEffect trackcount', count)
 
       setTrackCount(count);
     }
 
     return () => {
-      setTracks(0)
+      setTracks({}),
+      setTrackCount(0)
     }
-  }, [setTracks])
+  }, [setTracks, setTrackCount])
 
-  console.log({albums})
+  // console.log({albums, tracks, trackCount})
 
   return (
     <>
@@ -223,7 +246,7 @@ const PlaylistGenerator = () => {
             <div id='album-gallery' className='w-full p-0 my-4'>
               { (albums.length > 0 ) && albums.map((album, i) => {
                 return (
-                  <div className='album-container w-full md:w-1/2 lg:w-1/3 xl:w-1/4 p-0'>
+                  <div className='album-container w-full md:w-1/2 lg:w-1/3 xl:w-1/4 p-0' key={i}>
                     <div>
                       <div className='album-inner-container text-center'>
                         {(album.images.length > 0) && (
@@ -240,37 +263,35 @@ const PlaylistGenerator = () => {
                             <div className='flip-card-front'>
                               <table className='mt-2'>
                                 <tbody>
-                                  <tr>
-                                    { albums.artists.length === 1 ? (
-                                      <>
-                                        <td>Artist:</td>
-                                        <td>
-                                          <a href={album.artists[0].external_urls.spotify} target='_blank' className='album-artist-link'>{ album.artists[0].name }</a>
-                                        </td>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <td>Artists:</td>
-                                        <td>
-                                          {artists.map((artist, artistIndex) => {
-                                            return (
-                                              <>
-                                                <a href={artist.external_urls.spotify} key={artistIndex} target='_blank' className='album-artist-link'>{ artist.name }</a>
-                                                { (artistIndex < album.artists.length - 1) && <span>, </span>}
-                                              </>
-                                            )
-                                          })}
-                                        </td>
-                                      </>
-                                    )}
-                                  </tr>
+                                  { album.artists.length === 1 ? (
+                                    <tr>
+                                      <td>Artist:</td>
+                                      <td>
+                                        <a href={album.artists[0].external_urls.spotify} target='_blank' className='album-artist-link'>{ album.artists[0].name }</a>
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    <tr>
+                                      <td>Artists:</td>
+                                      <td>
+                                        {album.artists.map((artist, artistIndex) => {
+                                          return (
+                                            <span key={artistIndex}>
+                                              <a href={artist.external_urls.spotify} target='_blank' className='album-artist-link'>{ artist.name }</a>
+                                              { (artistIndex < album.artists.length - 1) && (<span>, </span>) }
+                                            </span>
+                                          )
+                                        })}
+                                      </td>
+                                    </tr>
+                                  )}
                                   <tr>
                                       <td>Album:</td>
                                       <td><a href={album.external_urls.spotify} className="album-link">{ album.name }</a></td>
                                   </tr>
                                   <tr>
                                       <td>Type:</td>
-                                      <td style="text-transform: capitalize;">{ album.album_type }</td>
+                                      <td className="uppercase">{ album.album_type }</td>
                                   </tr>
                                   <tr>
                                       <td>Released:</td>
@@ -294,11 +315,11 @@ const PlaylistGenerator = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {tracks.length && tracks[album.id].map((track, trackIndex) => {
+                                    {tracks[album.id].length && tracks[album.id].map((track, trackIndex) => {
                                       return (
                                         <tr key={trackIndex} className=''>
                                           <td className='track-no-row'>{ track.track_number }</td>
-                                          <td>{ track.number }</td>
+                                          <td>{ track.name }</td>
                                           <td className='track-preview'>
                                             <i className='fas fa-play-circle'></i>
                                           </td>
@@ -311,8 +332,8 @@ const PlaylistGenerator = () => {
                             </div>
                           </div>
                         </div>
-                        <button className='btn btn-spotify mt-3 flip-card-button'>
-                          <i className='fas fa-redo-alt'></i> View album <span id={`flip-view-tracks-${trackIndex}`}>tracks</span><span id={`flip-view-albums-${trackIndex}`}>info</span>.
+                        <button className='btn btn-spotify mt-3 flip-card-button' onClick={() => flipCard(i)}>
+                          <i className='fas fa-redo-alt'></i> View album <span id={`flip-view-tracks-${i}`}>tracks</span><span id={`flip-view-albums-${i}`}>info</span>.
                         </button>
                       </div>
                     </div>
