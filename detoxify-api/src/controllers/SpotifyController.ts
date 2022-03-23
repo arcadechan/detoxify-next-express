@@ -1,19 +1,14 @@
 import { Request, Response } from 'express'
-import axios, { Axios, AxiosError, AxiosResponse } from 'axios'
+import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'Axios'
 import { refreshAccess } from './AuthorizationController'
 import { debug } from 'console'
 import fs from 'fs'
 
-// const SPOTIFY_API: string = process.env.SPOTIFY_API
-
 const getArtists = async (req: Request, res: Response) => {
   let accessToken: string = req.cookies.spotify_access_token
 
-  // debug('getArtists {accessToken, req.cookies}', {accessToken, 'req.cookies': req.cookies})
-
   if(!accessToken)
   {
-    // debug('no access token!')
     const refreshResponse = await refreshAccess(req);
 
     accessToken = refreshResponse.accessToken
@@ -24,13 +19,10 @@ const getArtists = async (req: Request, res: Response) => {
         expires: new Date(Date.parse(expiresIn)),
       })
     }
-
-    // debug('getArtists accessToken from refresh', {accessToken})
   }
 
   const artists: any[] = []
   let nextURL: string|null = 'https://api.spotify.com/v1/me/following?type=artist&limit=50'
-  let count: number = 0;
 
   do
   {
@@ -40,18 +32,15 @@ const getArtists = async (req: Request, res: Response) => {
     })
     .then((response: AxiosResponse) =>
     {
-      // debug('getArtists axios response', {'data.artists.items': response.data.artists.items, 'headers': response.headers})
       artists.push(...response.data.artists.items)
-      count++;
       nextURL = response.data.artists.next
     }).catch((error: AxiosError) =>
     {
       debug('getArtists error', {error, responseHeaders: error.response.headers, responseData: error.response.data})
-      nextURL = ''
       res.status(500).send(error.response.data);
       return;
     })
-  }while(nextURL && count < 2)
+  } while(nextURL)
 
 
   const junkArtistInfo: string[] = ['followers', 'genres', 'href', 'popularity']
@@ -89,14 +78,19 @@ const createPlaylist = async (req: Request, res: Response) => {
     }
   }
 
+  const Axios: AxiosInstance = axios.create({
+    baseURL: 'https://api.spotify.com/v1',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  })
+
   if(!spotify_playlist_id)
   {
-    const createPlaylistResponse = await axios.post(`https://api.spotify.com/v1/users/${userId}/playlists`, {name: 'Detoxed Release Radar'},
-    {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    })
-    .then((response: AxiosResponse) => response )
-    .catch((err: AxiosError) => err.response )
+    debug('!spotify_playlist_id. WTF', {'req.cookies': req.cookies})
+    const createPlaylistResponse = await Axios.post(`/users/${userId}/playlists`, {name: 'Detoxed Release Radar'})
+      .then((response: AxiosResponse) => response )
+      .catch((err: AxiosError) => err.response )
 
     if(createPlaylistResponse.status === 201)
     {
@@ -105,19 +99,14 @@ const createPlaylist = async (req: Request, res: Response) => {
 
       const defaultImage: string = Buffer.from(fs.readFileSync('./public/img/detoxed-release-radar.jpg')).toString('base64');
 
-      await axios.put(`https://api.spotify.com/v1/playlists/${spotify_playlist_id}/images`, defaultImage,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'image/jpeg'
-        }
-      })
-      .then((response: AxiosResponse) => response)
-      .catch((err: AxiosError) =>
-      {
-        debug(`Something went wrong when trying to attach the default image to playlist: ${spotify_playlist_id}`);
-        debug(err.response);
-      })
+      Axios.defaults.headers.put['Content-Type'] = 'image/jpeg';
+      await Axios.put(`/playlists/${spotify_playlist_id}/images`, defaultImage)
+        .then((response: AxiosResponse) => response)
+        .catch((err: AxiosError) =>
+        {
+          debug(`Something went wrong when trying to attach the default image to playlist: ${spotify_playlist_id}`);
+          debug(err.response);
+        })
     }
     else
     {
@@ -129,26 +118,20 @@ const createPlaylist = async (req: Request, res: Response) => {
   else
   {
     // Follow the playlist in case a user has deleted it from their account. This reduces cluttering the playlist recovery list.
-    await axios.put(`https://api.spotify.com/v1/playlist/${spotify_playlist_id}/followers`, {public: false},
-    {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    })
-    .catch((err: AxiosError) =>
-    {
-      debug(`Something went wrong when trying to re-follow playlist: ${spotify_playlist_id}`)
-      debug(err.response)
-    })
+    await Axios.put(`/playlists/${spotify_playlist_id}/followers`, {public: false})
+      .catch((err: AxiosError) =>
+      {
+        debug(`Something went wrong when trying to re-follow playlist: ${spotify_playlist_id}`)
+        debug(err.response)
+      })
 
     // Delete contents in playlist before adding new songs.
-    await axios.put(`https://api.spotify.com/v1/playlist/${spotify_playlist_id}/tracks`, {uris: []},
-    {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    })
-    .catch((err: AxiosError) =>
-    {
-      debug(`Something went wrong when trying to clear playlist: ${spotify_playlist_id}`)
-      debug(err.response)
-    })
+    await Axios.put(`/playlists/${spotify_playlist_id}/tracks`, {uris: []})
+      .catch((err: AxiosError) =>
+      {
+        debug(`Something went wrong when trying to clear playlist: ${spotify_playlist_id}`)
+        debug(err.response)
+      })
   }
 
   const albums: any[] = []
@@ -168,43 +151,42 @@ const createPlaylist = async (req: Request, res: Response) => {
     {
       const artistAlbums: any[] = []
 
-      const singlesResponse = await axios.get(`https://api.spotify.com/v1/artists/${artistId}/albums`,
-      {
-        params: {
-          include_groups: 'single',
-          market: userCountry,
-          limit: 3
-        },
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      }).then((response: AxiosResponse) => response)
-      .catch((err: AxiosError) =>
-      {
-        debug(`Something went wrong when trying to get artist's (${artistId}) singles.`)
-        debug(err.response.data)
-        return err.response
-      })
+      const singlesResponse = await Axios.get(`/artists/${artistId}/albums`,
+        {
+          params: {
+            include_groups: 'single',
+            market: userCountry,
+            limit: 3
+          }
+        })
+        .then((response: AxiosResponse) => response)
+        .catch((err: AxiosError) =>
+        {
+          debug(`Something went wrong when trying to get artist's (${artistId}) singles.`)
+          debug(err.response.data)
+          return err.response
+        })
 
-      const albumsResponse = await axios.get(`https://api.spotify.com/v1/artists/${artistId}/albums`,
-      {
-        params: {
-          include_groups: 'album',
-          market: userCountry,
-          limit: 3
-        },
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      }).then((response: AxiosResponse) => response)
-      .catch((err: AxiosError) =>
-      {
-        debug(`Something went wrong when trying to get artist's (${artistId}) albums.`)
-        debug(err.response.data)
-        return err.response
-      })
+      const albumsResponse = await Axios.get(`/artists/${artistId}/albums`,
+        {
+          params: {
+            include_groups: 'album',
+            market: userCountry,
+            limit: 3
+          }
+        })
+        .then((response: AxiosResponse) => response)
+        .catch((err: AxiosError) =>
+        {
+          debug(`Something went wrong when trying to get artist's (${artistId}) albums.`)
+          debug(err.response.data)
+          return err.response
+        })
 
       if(singlesResponse.status === 200 && albumsResponse.status === 200)
       {
         artistAlbums.push(...singlesResponse.data.items, ...albumsResponse.data.items)
 
-        debug(`Starting loop of ${artistId}'s albums.`);
         for(const album of artistAlbums)
         {
           if(Date.parse(album.release_date) >= oneMonthBack)
@@ -216,21 +198,19 @@ const createPlaylist = async (req: Request, res: Response) => {
 
             albums.push(album)
 
-            debug('Calling',`https://api.spotify/com/v1/albums/${album.id}/tracks`)
-            const tracksResponse = await axios.get(`https://api.spotify.com/v1/albums/${album.id}/tracks`,
-            {
-              params: {
-                limit: 50
-              },
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-            })
-            .then((response: AxiosResponse) => response)
-            .catch((err: AxiosError) =>
-            {
-              debug(`Something went wrong when trying to get album (${album.id}) tracks for artist ${artistId}`)
-              debug(err)
-              return {status: 500, data: null};
-            })
+            const tracksResponse = await Axios.get(`/albums/${album.id}/tracks`,
+              {
+                params: {
+                  limit: 50
+                }
+              })
+              .then((response: AxiosResponse) => response)
+              .catch((err: AxiosError) =>
+              {
+                debug(`Something went wrong when trying to get album (${album.id}) tracks for artist ${artistId}`)
+                debug(err)
+                return {status: 500, data: null};
+              })
 
             if(tracksResponse.status === 200)
             {
@@ -257,15 +237,12 @@ const createPlaylist = async (req: Request, res: Response) => {
 
               albumTracks[album.id] = tracks
 
-              await axios.post(`https://api.spotify.com/v1/playlists/${spotify_playlist_id}/tracks`, { uris: trackUris },
-              {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-              })
-              .catch((err: AxiosError) =>
-              {
-                debug(`Something went wrong when trying to add tracks to playlist: ${spotify_playlist_id}`)
-                debug(err.response)
-              })
+              await Axios.post(`/playlists/${spotify_playlist_id}/tracks`, { uris: trackUris })
+                .catch((err: AxiosError) =>
+                {
+                  debug(`Something went wrong when trying to add tracks to playlist: ${spotify_playlist_id}`)
+                  debug(err.response)
+                })
             }
             else
             {
